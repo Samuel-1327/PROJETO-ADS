@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MindTrack · Registro de humor</title>
+<style>
+  :root {
+    --papel: #f2f5f9;
+    --tinta: #1c2740;
+    --suave: #5a667d;
+    --linha: #cfd7e3;
+    --destaque: #2b6c8f;
+    --destaque-texto: #ffffff;
+    --baixo: #3c8a6b;
+    --medio: #b8872b;
+    --alto: #b2473f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --papel: #141b2b;
+      --tinta: #e8edf6;
+      --suave: #9aa6bd;
+      --linha: #2d3850;
+      --destaque: #6bb3d6;
+      --destaque-texto: #0e1522;
+      --baixo: #63c09a;
+      --medio: #e0b350;
+      --alto: #e8837a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light dark; }
+  body {
+    margin: 0;
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    line-height: 1.55;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 40px 20px 64px; }
+  h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 400;
+    font-size: 2.1rem;
+    line-height: 1.2;
+    margin: 0 0 8px;
+  }
+  .intro { color: var(--suave); margin: 0 0 32px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 28px; }
+  legend, label.titulo { font-weight: 600; display: block; margin-bottom: 10px; padding: 0; }
+  .dica { color: var(--suave); font-weight: 400; font-size: .9rem; }
+
+  /* Escala de humor: 5 opções, só uma pode ficar marcada */
+  .escala { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .escala button {
+    font: inherit; color: inherit; background: transparent;
+    border: 1.5px solid var(--linha); border-radius: 10px;
+    padding: 12px 4px 10px; cursor: pointer; text-align: center;
+  }
+  .escala .num { display: block; font-family: Georgia, serif; font-size: 1.6rem; line-height: 1.1; }
+  .escala .rot { display: block; font-size: .75rem; color: var(--suave); margin-top: 2px; }
+  .escala button[aria-checked="true"] { background: var(--destaque); border-color: var(--destaque); color: var(--destaque-texto); }
+  .escala button[aria-checked="true"] .rot { color: inherit; }
+
+  /* Emoções e gatilhos: botões que ligam e desligam */
+  .opcoes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opcoes button {
+    font: inherit; color: inherit; background: transparent;
+    border: 1.5px solid var(--linha); border-radius: 999px;
+    padding: 6px 14px; cursor: pointer;
+  }
+  .opcoes button[aria-pressed="true"] { background: var(--destaque); border-color: var(--destaque); color: var(--destaque-texto); }
+
+  textarea {
+    width: 100%; min-height: 110px; resize: vertical;
+    font: inherit; color: inherit; background: transparent;
+    border: 1.5px solid var(--linha); border-radius: 10px; padding: 12px;
+  }
+  .contador { text-align: right; color: var(--suave); font-size: .8rem; margin-top: 4px; }
+
+  button:focus-visible, textarea:focus-visible { outline: 3px solid var(--destaque); outline-offset: 2px; }
+
+  #enviar {
+    font: inherit; font-weight: 600; cursor: pointer;
+    background: var(--destaque); color: var(--destaque-texto);
+    border: 0; border-radius: 10px; padding: 14px 22px; width: 100%;
+  }
+  #enviar:disabled { opacity: .6; cursor: wait; }
+
+  #aviso { margin-top: 16px; color: var(--alto); min-height: 1.5em; }
+
+  /* Resultado da IA */
+  #resultado { margin-top: 36px; padding-left: 18px; border-left: 4px solid var(--linha); }
+  #resultado[hidden] { display: none; }
+  #resultado.baixo { border-left-color: var(--baixo); }
+  #resultado.medio { border-left-color: var(--medio); }
+  #resultado.alto  { border-left-color: var(--alto); }
+  #resultado h2 { font-family: Georgia, serif; font-weight: 400; font-size: 1.4rem; margin: 0 0 6px; }
+  .meta { color: var(--suave); margin: 0 0 14px; font-size: .95rem; }
+  #resumo { margin: 0 0 18px; }
+  #recomendacoes { padding-left: 20px; margin: 0 0 18px; }
+  #recomendacoes li { margin-bottom: 8px; }
+  #recomendacoes .tipo { color: var(--suave); }
+  #alerta { padding: 12px 14px; border: 1.5px solid var(--alto); border-radius: 10px; }
+  #alerta[hidden] { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Como você está hoje?</h1>
+  <p class="intro">Registre seu humor e receba uma análise com sugestões de autocuidado. O MindTrack não faz diagnóstico e não substitui um profissional de saúde.</p>
+
+  <!-- Formulário: os dados daqui são enviados para a API quando o botão é clicado -->
+  <form id="formulario" novalidate>
+    <fieldset>
+      <legend>Nível de humor</legend>
+      <div class="escala" id="escala" role="radiogroup" aria-label="Nível de humor de 1 a 5"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Emoções <span class="dica">(escolha quantas quiser)</span></legend>
+      <div class="opcoes" id="emocoes"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>O que influenciou? <span class="dica">(opcional)</span></legend>
+      <div class="opcoes" id="gatilhos"></div>
+    </fieldset>
+
+    <div style="margin-bottom: 28px;">
+      <label class="titulo" for="descricao">Conte como foi seu dia</label>
+      <textarea id="descricao" maxlength="2000" placeholder="Ex.: semana de provas, dormi pouco e estou ansioso."></textarea>
+      <div class="contador"><span id="qtd">0</span>/2000</div>
+    </div>
+
+    <button type="submit" id="enviar">Analisar com IA</button>
+    <div id="aviso" role="alert"></div>
+  </form>
+
+  <!-- Resposta da IA, mostrada depois que a API responde -->
+  <section id="resultado" hidden aria-live="polite">
+    <h2>Sua análise</h2>
+    <p class="meta" id="meta"></p>
+    <p id="resumo"></p>
+    <ul id="recomendacoes"></ul>
+    <div id="alerta" hidden></div>
+  </section>
+</main>
+
+<script>
+  // ---------------------------------------------------------------
+  // Configuração
+  // A página é servida pela própria API (pasta static do Spring),
+  // então o endereço é relativo e não existe problema de CORS.
+  // ---------------------------------------------------------------
+  const API = "";          // vazio = mesmo endereço (http://localhost:8080)
+  const USUARIO_ID = 1;    // usuário de teste criado automaticamente pela API
+
+  const ROTULOS = ["Muito baixo", "Baixo", "Neutro", "Bom", "Muito bom"];
+  const EMOCOES = ["ansioso", "cansado", "triste", "estressado", "irritado", "calmo", "feliz", "motivado"];
+  const GATILHOS = ["provas", "trabalho", "sono ruim", "família", "finanças", "relacionamento", "saúde", "prazos"];
+
+  let humor = 0;
+
+  // ---------- Montagem da tela ----------
+  const escala = document.getElementById("escala");
+  ROTULOS.forEach((rotulo, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", "false");
+    b.innerHTML = `<span class="num">${i + 1}</span><span class="rot">${rotulo}</span>`;
+    b.addEventListener("click", () => {
+      humor = i + 1;
+      escala.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", "false"));
+      b.setAttribute("aria-checked", "true");
+    });
+    escala.appendChild(b);
+  });
+
+  function criarOpcoes(idContainer, lista) {
+    const c = document.getElementById(idContainer);
+    lista.forEach(nome => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = nome;
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", () => {
+        b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true");
+      });
+      c.appendChild(b);
+    });
+  }
+  criarOpcoes("emocoes", EMOCOES);
+  criarOpcoes("gatilhos", GATILHOS);
+
+  const descricao = document.getElementById("descricao");
+  descricao.addEventListener("input", () => {
+    document.getElementById("qtd").textContent = descricao.value.length;
+  });
+
+  function selecionados(idContainer) {
+    return [...document.querySelectorAll(`#${idContainer} button[aria-pressed="true"]`)].map(b => b.textContent);
+  }
+
+  // ---------- Mensagens de erro em linguagem simples ----------
+  function mensagemDeErro(status) {
+    if (status === 400) return "Algum campo está inválido. Confira o humor e o relato.";
+    if (status === 404) return "Não encontramos o usuário ou o registro na API.";
+    if (status === 409) return "Este registro já foi analisado.";
+    if (status === 503) return "A IA ainda não está configurada. Defina a variável GROQ_API_KEY e reinicie a API.";
+    if (status === 502) return "A IA não respondeu. Tente de novo em instantes.";
+    return "A API devolveu um erro (código " + status + ").";
+  }
+
+  // ---------- Envio para a API ----------
+  document.getElementById("formulario").addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const aviso = document.getElementById("aviso");
+    const botao = document.getElementById("enviar");
+    aviso.textContent = "";
+
+    if (humor === 0) { aviso.textContent = "Escolha um nível de humor de 1 a 5."; return; }
+    if (descricao.value.trim() === "") { aviso.textContent = "Escreva um pequeno relato do seu dia."; return; }
+
+    botao.disabled = true;
+    botao.textContent = "Analisando...";
+    let registroId = null;
+
+    try {
+      // PASSO 1: POST /registros -> salva o registro de humor no banco
+      const dados = {
+        usuarioId: USUARIO_ID,
+        nivelHumor: humor,
+        descricao: descricao.value.trim(),
+        emocoes: selecionados("emocoes"),
+        gatilhos: selecionados("gatilhos")
+      };
+      const r1 = await fetch(API + "/registros", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dados)
+      });
+      if (!r1.ok) throw new Error(mensagemDeErro(r1.status));
+      const registro = await r1.json();
+      registroId = registro.id;
+
+      // PASSO 2: POST /registros/{id}/analise -> a API consulta a IA e salva a resposta
+      const r2 = await fetch(API + "/registros/" + registroId + "/analise", { method: "POST" });
+      if (!r2.ok) throw new Error(mensagemDeErro(r2.status));
+      const analise = await r2.json();
+
+      mostrarResultado(analise);
+    } catch (erro) {
+      const salvo = registroId ? " O registro " + registroId + " foi salvo, mas a análise falhou. " : " ";
+      aviso.textContent = salvo + (erro instanceof TypeError
+        ? "Não foi possível falar com a API. Confira se ela está rodando em localhost:8080."
+        : erro.message);
+    } finally {
+      botao.disabled = false;
+      botao.textContent = "Analisar com IA";
+    }
+  });
+
+  // ---------- Mostra a resposta da IA na tela ----------
+  function mostrarResultado(a) {
+    const bloco = document.getElementById("resultado");
+    bloco.hidden = false;
+    bloco.className = a.nivelAlerta || "";
+    document.getElementById("meta").textContent =
+      "Sentimento: " + a.sentimento + " | Nível de alerta: " + a.nivelAlerta;
+    document.getElementById("resumo").textContent = a.resposta;
+
+    const lista = document.getElementById("recomendacoes");
+    lista.innerHTML = "";
+    (a.recomendacoes || []).forEach(r => {
+      const li = document.createElement("li");
+      const tipo = document.createElement("span");
+      tipo.className = "tipo";
+      tipo.textContent = r.tipo + ": ";
+      li.appendChild(tipo);
+      li.appendChild(document.createTextNode(r.texto));
+      lista.appendChild(li);
+    });
+
+    const alerta = document.getElementById("alerta");
+    alerta.hidden = !a.alertaApoio;
+    alerta.textContent = a.alertaApoio || "";
+    bloco.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+</script>
+</body>
+</html>
